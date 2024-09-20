@@ -1,9 +1,12 @@
-import express, { Request, Response, NextFunction } from 'express';
-import 'express-async-errors';
-import cors from 'cors';
 import axios from 'axios';
+import cors from 'cors';
+import disposableDomains from 'disposable-email-domains';
+import dns from 'dns';
 import dotenv from 'dotenv';
+import express, { NextFunction, Request, Response } from 'express';
+import 'express-async-errors';
 import morgan from 'morgan';
+import validator from 'validator';
 import { setupSwagger } from './swagger.config';
 
 //#region App Setup
@@ -22,7 +25,70 @@ setupSwagger(app, BASE_URL);
 //#endregion App Setup
 
 //#region Code here
-console.log('Hello world');
+
+/**
+ * @swagger
+ * /verify/{email}:
+ *   get:
+ *     summary: Verify an email address.
+ *     description: Validates the email format, checks domain MX records, and blocks disposable email domains.
+ *     tags: [Email]
+ *     parameters:
+ *       - in: path
+ *         name: email
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Email address to be verified.
+ *     responses:
+ *       '200':
+ *         description: Email is valid.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "test@example.com is a valid email address"
+ *       '400':
+ *         description: Bad request. Invalid email or domain.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Invalid email domain"
+ */
+app.get('/verify/:email', async (req: Request, res: Response) => {
+  const email = req.params.email;
+  const domain = email.split('@')[1];
+
+  if (!validator.isEmail(email))
+    return res.status(400).send({ message: 'Email text is invalid' });
+
+  if (disposableDomains.includes(domain))
+    return res
+      .status(400)
+      .send({ message: 'Invalid email. Uses disposable domain' });
+
+  dns.resolveMx(domain, (err, addresses) => {
+    if (err || addresses.length === 0) {
+      return res
+        .status(400)
+        .send({
+          message: 'Invalid email domain. Mail exchange records dont exist',
+        });
+    } else {
+      return res.send({
+        message: `${email.toLowerCase()} is a valid email address`,
+      });
+    }
+  });
+});
+
 //#endregion
 
 //#region Server Setup
@@ -92,7 +158,7 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   console.log(`${'\x1b[31m'}`); // start color red
   console.log(`${err.message}`);
   console.log(`${'\x1b][0m]'}`); //stop color
-  
+
   return res
     .status(500)
     .send({ success: false, status: 500, message: err.message });
