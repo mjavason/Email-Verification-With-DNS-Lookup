@@ -1,4 +1,4 @@
-# Email-Verification-With-DNS-Lookup
+# Email-Verification-With-MX-Lookup
 
 You can check if the domain of an email has valid MX (Mail Exchange) records, which indicate that the domain can accept emails. you can also check if the address belongs to popular disposable email domains.
 
